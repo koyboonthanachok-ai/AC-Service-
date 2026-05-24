@@ -84,6 +84,7 @@
               <rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/>
             </svg>
             <h2 class="text-[17px] font-semibold">รายการบริการ</h2>
+            <span id="csv-status" class="ml-auto text-[11px] font-medium text-muted transition-colors"></span>
           </div>
 
           <!-- Service item list -->
@@ -259,6 +260,8 @@
   <!-- ─── JavaScript ──────────────────────────────────────────────────── -->
   <script>
     // ── Data ──────────────────────────────────────────────────────────────
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSJI9dtrv2q73CUjgQrzXSb02GQQcfgCJtmxxSKgMKn0QWl6i6YbEgnYml8Wp0K-fpyydGzoc7gug72/pub?output=csv'
+
     const SERVICES = {
       wash:    { label: 'ล้างแอร์',    prices: { '9000': 500,  '12000': 600,  '18000': 800,  '24000': 1000, '28000': 1200 } },
       repair:  { label: 'ซ่อมแอร์',   prices: { '9000': 800,  '12000': 900,  '18000': 1100, '24000': 1300, '28000': 1500 } },
@@ -272,6 +275,67 @@
       { v: '24000', label: '24,000 BTU (2 ตัน)' },
       { v: '28000', label: '28,000+ BTU (2.5 ตัน+)' },
     ]
+
+    const TON_LABELS = { 9000:'0.75 ตัน', 12000:'1 ตัน', 18000:'1.5 ตัน', 24000:'2 ตัน', 28000:'2.5 ตัน', 36000:'3 ตัน' }
+    const SVC_KEY_MAP = { 'ล้างแอร์':'wash', 'ซ่อมแอร์':'repair', 'ติดตั้งแอร์':'install' }
+
+    // ── CSV Loader ────────────────────────────────────────────────────────
+    function parseCSVLine(line) {
+      const result = []
+      let cur = '', inQ = false
+      for (const ch of line) {
+        if (ch === '"') { inQ = !inQ }
+        else if (ch === ',' && !inQ) { result.push(cur.trim()); cur = '' }
+        else { cur += ch }
+      }
+      result.push(cur.trim())
+      return result
+    }
+
+    async function loadPricingFromCSV() {
+      const status = $('csv-status')
+      status.textContent = 'กำลังโหลดราคา…'
+      try {
+        const res = await fetch(CSV_URL)
+        if (!res.ok) throw new Error('HTTP ' + res.status)
+        const text = await res.text()
+        const rows = text.trim().split(/\r?\n/).map(parseCSVLine)
+        if (rows.length < 2) throw new Error('No data')
+
+        const headers = rows[0]
+        const btuCols = headers.slice(1).map(h => h.replace(/[^0-9]/g, '')).filter(Boolean)
+
+        // Rebuild SIZES from CSV columns
+        SIZES.length = 0
+        btuCols.forEach(btu => {
+          const n = parseInt(btu)
+          const ton = TON_LABELS[n]
+          SIZES.push({ v: String(n), label: `${n.toLocaleString('th-TH')} BTU${ton ? ' ('+ton+')' : ''}` })
+        })
+
+        // Rebuild SERVICES prices from CSV rows
+        rows.slice(1).forEach(row => {
+          const name = row[0]
+          const key = SVC_KEY_MAP[name] ?? Object.entries(SVC_KEY_MAP).find(([k]) => name.includes(k.replace('แอร์','')))?.[1]
+          if (!key || !SERVICES[key]) return
+          SERVICES[key].label = name
+          const prices = {}
+          btuCols.forEach((btu, i) => {
+            const val = parseInt((row[i + 1] ?? '0').replace(/[^0-9]/g, ''))
+            prices[btu] = isNaN(val) ? 0 : val
+          })
+          SERVICES[key].prices = prices
+        })
+
+        status.textContent = '✓ โหลดราคาแล้ว'
+        status.className = 'ml-auto text-[11px] font-medium text-green-600 transition-colors'
+        setTimeout(() => { status.textContent = ''; status.className = 'ml-auto text-[11px] font-medium text-muted transition-colors' }, 3000)
+      } catch (e) {
+        console.warn('CSV load failed, using defaults:', e)
+        status.textContent = '⚠ ใช้ราคาเริ่มต้น'
+        status.className = 'ml-auto text-[11px] font-medium text-amber-600 transition-colors'
+      }
+    }
 
     const DISTANCE_LABELS = {
       0: 'ไม่เกิน 5 กม.', 150: '6–10 กม.', 300: '11–20 กม.',
@@ -636,11 +700,11 @@
     }
 
     // ── Init ──────────────────────────────────────────────────────────────
-    // Set min date to today
     const today = new Date().toISOString().split('T')[0]
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       $('svc-date').min = today
       $('svc-date').value = today
+      await loadPricingFromCSV()
       addItem()
     })
   </script>
