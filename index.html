@@ -263,9 +263,9 @@
     const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSJI9dtrv2q73CUjgQrzXSb02GQQcfgCJtmxxSKgMKn0QWl6i6YbEgnYml8Wp0K-fpyydGzoc7gug72/pub?output=csv'
 
     const SERVICES = {
-      wash:    { label: 'ล้างแอร์',    prices: { '9000': 500,  '12000': 600,  '18000': 800,  '24000': 1000, '28000': 1200 } },
-      repair:  { label: 'ซ่อมแอร์',   prices: { '9000': 800,  '12000': 900,  '18000': 1100, '24000': 1300, '28000': 1500 } },
-      install: { label: 'ติดตั้งแอร์', prices: { '9000': 1500, '12000': 1800, '18000': 2200, '24000': 2800, '28000': 3500 } },
+      wash:    { label: 'ล้างแอร์',    prices: { '9000': 600,  '12000': 700,  '18000': 900,  '24000': 1100, '36000': 1400 } },
+      repair:  { label: 'ซ่อมแอร์',   prices: { '9000': 800,  '12000': 900,  '18000': 1100, '24000': 1300, '36000': 1600 } },
+      install: { label: 'ติดตั้งแอร์', prices: { '9000': 1500, '12000': 1800, '18000': 2200, '24000': 2800, '36000': 3500 } },
     }
 
     const SIZES = [
@@ -273,10 +273,11 @@
       { v: '12000', label: '12,000 BTU (1 ตัน)' },
       { v: '18000', label: '18,000 BTU (1.5 ตัน)' },
       { v: '24000', label: '24,000 BTU (2 ตัน)' },
-      { v: '28000', label: '28,000+ BTU (2.5 ตัน+)' },
+      { v: '36000', label: '36,000 BTU (3 ตัน)' },
     ]
 
-    const TON_LABELS = { 9000:'0.75 ตัน', 12000:'1 ตัน', 18000:'1.5 ตัน', 24000:'2 ตัน', 28000:'2.5 ตัน', 36000:'3 ตัน' }
+    const TON_LABELS = { 9000:'0.75 ตัน', 12000:'1 ตัน', 18000:'1.5 ตัน', 24000:'2 ตัน', 36000:'3 ตัน' }
+    // CSV ใช้ชื่อ English key ตรง (wash/repair/install) หรือชื่อไทย
     const SVC_KEY_MAP = { 'ล้างแอร์':'wash', 'ซ่อมแอร์':'repair', 'ติดตั้งแอร์':'install' }
 
     // ── CSV Loader ────────────────────────────────────────────────────────
@@ -316,9 +317,10 @@
         // Rebuild SERVICES prices from CSV rows
         rows.slice(1).forEach(row => {
           const name = row[0]
-          const key = SVC_KEY_MAP[name] ?? Object.entries(SVC_KEY_MAP).find(([k]) => name.includes(k.replace('แอร์','')))?.[1]
+          // รองรับทั้ง English key (wash/repair/install) และชื่อไทย
+          const key = name in SERVICES ? name : SVC_KEY_MAP[name]
           if (!key || !SERVICES[key]) return
-          SERVICES[key].label = name
+          // ไม่เปลี่ยน label ถ้า CSV ใช้ English key
           const prices = {}
           btuCols.forEach((btu, i) => {
             const val = parseInt((row[i + 1] ?? '0').replace(/[^0-9]/g, ''))
